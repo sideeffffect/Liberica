@@ -57,22 +57,3 @@ RUN LIBERICA_ARCH='' && LIBERICA_ARCH_TAG='' && \
 ENV JAVA_HOME=${LIBERICA_ROOT} \
 	PATH=${LIBERICA_ROOT}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-
-# CVE-2026-91403: distrust the compromised eMudhra/emSign intermediate CAs by removing the emSign
-# roots and, when USERTrust is present to carry modern Sectigo chains, the Sectigo
-# "AAA Certificate Services" cross-sign root. Remove once the bundled JDK ships the fix.
-RUN     KS="${JAVA_HOME}/lib/security/cacerts"                                                   \
-  &&    if [ ! -f "${KS}" ]; then KS="${JAVA_HOME}/jre/lib/security/cacerts"; fi                 \
-  &&    KT="${JAVA_HOME}/bin/keytool"                                                            \
-  &&    AAA="AAA Certificate Services"                                                           \
-  &&    if ! "${KT}" -list -keystore "${KS}" -storepass changeit | grep -qi usertrust; then AAA="emSign"; fi \
-  &&    distrusted() {                                                                           \
-            "${KT}" -list -v -keystore "${KS}" -storepass changeit                               \
-            | awk -F': ' -v aaa="${AAA}" '/^Alias name:/ { a = $2 } /^Owner:/ && (/emSign/ || index($0, aaa)) { print a }' \
-            | sort -u;                                                                           \
-        }                                                                                        \
-  &&    distrusted | while IFS= read -r ALIAS; do                                                \
-            "${KT}" -delete -alias "${ALIAS}" -keystore "${KS}" -storepass changeit || exit 1;   \
-        done                                                                                     \
-  &&    [ -z "$(distrusted)" ]                                                                   \
-  &&    rm -rf /tmp/hsperfdata_root
