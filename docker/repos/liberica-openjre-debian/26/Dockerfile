@@ -88,12 +88,15 @@ RUN     KS="${JAVA_HOME}/lib/security/cacerts"                                  
   &&    AAA="AAA Certificate Services"                                                           \
   &&    if ! "${KT}" -list -keystore "${KS}" -storepass changeit | grep -qi usertrust; then AAA="emSign"; fi \
   &&    distrusted() {                                                                           \
-            "${KT}" -list -v -keystore "${KS}" -storepass changeit                               \
+            LISTING="$("${KT}" -list -v -keystore "${KS}" -storepass changeit)" || return 1;     \
+            printf '%s\n' "${LISTING}"                                                           \
             | awk -F': ' -v aaa="${AAA}" '/^Alias name:/ { a = $2 } /^Owner:/ && (/emSign/ || index($0, aaa)) { print a }' \
             | sort -u;                                                                           \
         }                                                                                        \
-  &&    distrusted | while IFS= read -r ALIAS; do                                                \
-            "${KT}" -delete -alias "${ALIAS}" -keystore "${KS}" -storepass changeit || exit 1;   \
+  &&    ALIASES="$(distrusted)"                                                                  \
+  &&    printf '%s\n' "${ALIASES}" | while IFS= read -r ALIAS; do                                \
+            [ -z "${ALIAS}" ] || "${KT}" -delete -alias "${ALIAS}" -keystore "${KS}" -storepass changeit || exit 1; \
         done                                                                                     \
-  &&    [ -z "$(distrusted)" ]                                                                   \
+  &&    REMAINING="$(distrusted)"                                                                \
+  &&    [ -z "${REMAINING}" ]                                                                    \
   &&    rm -rf /tmp/hsperfdata_root
